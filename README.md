@@ -1,19 +1,41 @@
 # ExKcl
 
-**TODO: Add description**
+**WARNING: A work in progress**
+
+* Dynamodb Streams
+* Kinesis Streams
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `ex_kcl` to your list of dependencies in `mix.exs`:
-
 ```elixir
 def deps do
-  [{:ex_kcl, "~> 0.1.0"}]
+  [{:ex_kcl, github: "nerdyworm/ex_kcl"}]
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/ex_kcl](https://hexdocs.pm/ex_kcl).
+## Usage
 
+```elixir
+defmodule Stream do
+  use ExKcl.Stream, otp_app: :example
+end
+```
+
+```elixir
+defmodule Consumer do
+  use ExKcl.StreamConsumer
+
+  def handle_events(events, _from, state) do
+    IO.puts "consumer: #{length(events)}"
+    {:noreply, [], state}
+  end
+end
+```
+
+```elixir
+config :example, Stream, [
+  stream_name: "stream_name",
+  adapter: ExKcl.Adapters.Kinesis,
+  handlers: [Consumer]
+]
+```
