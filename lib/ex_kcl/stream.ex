@@ -42,7 +42,7 @@ defmodule ExKcl.Stream do
     otp_app = Keyword.fetch!(options, :otp_app)
     config = Application.get_env(otp_app, stream_module, [])
 
-    config = Keyword.merge(default_config, config)
+    config = Keyword.merge(default_config(), config)
     config = Keyword.merge(config, options)
     adapter = options[:adapter] || config[:adapter]
 
