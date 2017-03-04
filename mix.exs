@@ -16,11 +16,11 @@ defmodule ExKcl.Mixfile do
 
   defp deps do
     [
-      {:uuid, "~> 1.1" },
-      {:poison, "~> 2.0"},
-      {:hackney, "~> 1.7", override: true},
-      {:ex_aws, "~> 1.0"},
-      {:gen_stage, "~> 0.11.0"},
+      {:hackney,   "~> 1.7.0",  override: true},
+      {:gen_stage, "~> 0.11.0", override: true},
+      {:ex_aws,    "~> 1.1.0"},
+      {:uuid,      "~> 1.1" },
+      {:poison,    "~> 2.0"},
     ]
   end
 end
