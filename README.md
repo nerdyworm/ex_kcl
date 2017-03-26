@@ -39,3 +39,8 @@ config :example, Stream, [
   handlers: [Consumer]
 ]
 ```
+
+## TODO
+
+- handle shard does not exist error gracefully
+- handle provisioned throughput errors on leases
