@@ -21,7 +21,7 @@ defmodule ExKcl.Adapters.Dynamodb do
     else
       DynamoStreams.get_shard_iterator(stream_name, shard_id, :after_sequence_number, [sequence_number: checkpoint])
     end
-    |> ExAws.request!
+    |> ExAws.request
   end
 
   def get_records(iterator) do

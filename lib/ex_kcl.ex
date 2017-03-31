@@ -12,6 +12,7 @@ defmodule ExKcl do
       coordinator:  Module.concat(name, LeaseCoordinator),
       worker_sup:   Module.concat(name, ShardWorkerSupervisor),
       producer:     Module.concat(name, Producer),
+      task_supervisor:     Module.concat(name, TaskSupervisor),
       supervisor_registry: Module.concat(name, SupervisorRegistry),
       producer_registry:   Module.concat(name, ProducerRegistry),
     ] ++ opts
@@ -25,6 +26,7 @@ defmodule ExKcl do
       supervisor(Registry, [:unique, opts[:supervisor_registry]], id: 1),
       supervisor(Registry, [:unique, opts[:producer_registry]],   id: 2),
       supervisor(ExKcl.ShardWorkerSupervisor, [opts]),
+      supervisor(Task.Supervisor, [[name: opts[:task_supervisor]]])
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one)

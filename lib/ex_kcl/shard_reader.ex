@@ -1,12 +1,11 @@
-defmodule ExKcl.ShardProducer do
-  use GenStage
+defmodule ExKcl.ShardReader do
+  use GenServer
   require Logger
 
   defmodule State do
     defstruct [
-      queue: nil,
       adapter: nil,
-      demand: 0,
+      handler: nil,
       stream_name: nil,
       lease: nil,
       repo: nil,
@@ -15,6 +14,7 @@ defmodule ExKcl.ShardProducer do
       worker_sup: nil,
       worker_id: nil,
       supervisor_registry: nil,
+      task_supervisor: nil
     ]
   end
 
@@ -24,7 +24,7 @@ defmodule ExKcl.ShardProducer do
   }
 
   def start_link(opts, lease) do
-    GenStage.start_link(__MODULE__, {opts, lease}, name: via_tuple(opts, lease))
+    GenServer.start_link(__MODULE__, {opts, lease}, name: via_tuple(opts, lease))
   end
 
   def via_tuple(opts, %Lease{shard_id: shard_id}) do
@@ -35,14 +35,17 @@ defmodule ExKcl.ShardProducer do
     state = %State{
       lease:       lease,
       adapter:     opts[:adapter],
+      handler:     opts[:handler],
       repo:        opts[:repo],
       stream_name: opts[:stream_name],
       worker_sup:  opts[:worker_sup],
       worker_id:   opts[:worker_id],
+      task_supervisor: opts[:task_supervisor],
       supervisor_registry: opts[:supervisor_registry],
     }
 
-    {:producer, state, dispatcher: GenStage.BroadcastDispatcher}
+    Process.send(self(), :fetch_records, [])
+    {:ok, state}
   end
 
   def handle_info(:fetch_records, state) do
@@ -51,14 +54,8 @@ defmodule ExKcl.ShardProducer do
     |> fetch_records()
   end
 
-  def handle_demand(incoming_demand, %State{demand: demand} = state) do
-    %State{state | demand: incoming_demand + demand}
-    |> checkpoint()
-    |> fetch_records()
-  end
-
   defp fetch_records(%State{adapter: adapter, stream_name: stream_name, lease: lease, iterator: iterator, worker_id: worker_id} = state) when is_nil(iterator) do
-    case  adapter.get_shard_iterator(stream_name, lease) do
+    case adapter.get_shard_iterator(stream_name, lease) do
       {:ok, %{"ShardIterator" => iterator}} ->
         Logger.info "#{worker_id} has started #{lease.shard_id} at #{lease.checkpoint}"
         %State{state | iterator: iterator}
@@ -72,12 +69,12 @@ defmodule ExKcl.ShardProducer do
   end
 
   defp fetch_records(%State{lease: lease} = state) when is_nil(lease) do
-    {:noreply, [], state}
+    {:noreply, state}
   end
 
   defp fetch_records(%State{lease: %Lease{checkpoint: "SHARD_END"}} = state) do
     :ok = stop_supervisor(state)
-    {:noreply, [], state}
+    {:noreply, state}
   end
 
   defp fetch_records(%State{adapter: adapter, iterator: iterator} = state) do
@@ -100,18 +97,39 @@ defmodule ExKcl.ShardProducer do
     end
   end
 
+  defp run(records, state) do
+    ExKcl.RecordHandler.handle_records(state, state.handler, records)
+  end
+
+  defp dispatch_records(%{"Records" => [], "NextShardIterator" => iterator}, %State{lease: %Lease{checkpoint: "TRIM_HORIZON"}} = state) do
+    state =
+      %State{state | iterator: iterator, pending: "SHARD_END"}
+      |> checkpoint()
+
+    :ok = stop_supervisor(state)
+    {:noreply, state}
+  end
+
   defp dispatch_records(%{"Records" => [], "NextShardIterator" => iterator}, state) do
     Process.send_after(self(), :fetch_records, 2000) # TODO - config timeout
-    {:noreply, [], %State{state | iterator: iterator, pending: state.lease.checkpoint}}
+    {:noreply,  %State{state | iterator: iterator, pending: state.lease.checkpoint}}
   end
 
   defp dispatch_records(%{"Records" => records, "NextShardIterator" => iterator}, state) do
     checkpoint = records |> List.last() |> state.adapter.checkpoint_for_record()
-    {:noreply, [records], %State{state | iterator: iterator, demand: 0, pending: checkpoint}}
+
+    state = %State{state | iterator: iterator,  pending: checkpoint}
+    :ok = run(records, state)
+
+    Process.send(self(), :fetch_records, [])
+    {:noreply, state}
   end
 
   defp dispatch_records(%{"Records" => records}, state) do
-    {:noreply, [records], %State{state | pending: "SHARD_END"}}
+    checkpoint = "SHARD_END"
+    state = %State{state | iterator: nil, pending: checkpoint}
+    :ok = run(records, state)
+    {:noreply, state}
   end
 
   defp stop_supervisor(%State{worker_sup: worker_sup, supervisor_registry: supervisor_registry, lease: lease}) do

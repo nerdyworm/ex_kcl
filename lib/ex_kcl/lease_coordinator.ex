@@ -51,6 +51,10 @@ defmodule ExKcl.LeaseCoordinator do
             Map.put(workers, pid, lease.shard_id)
           {:error, {:already_started, _}} ->
             workers
+
+          {:error, {:shutdown, reason}} ->
+            Logger.error "failed to start worker: #{inspect reason}"
+            workers
         end
       end)
 
