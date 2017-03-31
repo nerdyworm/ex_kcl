@@ -64,7 +64,6 @@ defmodule ExKcl.ShardReader do
       {:error, {"ResourceNotFoundException", "Requested resource not found: Shard does not exist"}} ->
         %State{state | pending: "SHARD_END"}
         |> checkpoint()
-        |> fetch_records()
     end
   end
 
@@ -88,12 +87,16 @@ defmodule ExKcl.ShardReader do
 
   defp checkpoint(%State{pending: pending, lease: lease, repo: repo} = state) do
     case LeaseRepo.checkpoint(repo, lease, pending) do
-      {:ok, lease} ->
-        %State{state | lease: lease}
-
       {:error, :stolen} ->
         :ok = stop_supervisor(state)
         %State{state | lease: nil}
+
+      {:ok, %Lease{checkpoint: "SHARD_END"} = lease} ->
+        :ok = stop_supervisor(state)
+        %State{state | lease: lease}
+
+      {:ok, lease} ->
+        %State{state | lease: lease}
     end
   end
 
@@ -106,7 +109,6 @@ defmodule ExKcl.ShardReader do
       %State{state | iterator: iterator, pending: "SHARD_END"}
       |> checkpoint()
 
-    :ok = stop_supervisor(state)
     {:noreply, state}
   end
 
@@ -121,14 +123,17 @@ defmodule ExKcl.ShardReader do
     state = %State{state | iterator: iterator,  pending: checkpoint}
     :ok = run(records, state)
 
-    Process.send(self(), :fetch_records, [])
+    Process.send_after(self(), :fetch_records, 0) # TODO - config timeout
     {:noreply, state}
   end
 
   defp dispatch_records(%{"Records" => records}, state) do
-    checkpoint = "SHARD_END"
-    state = %State{state | iterator: nil, pending: checkpoint}
     :ok = run(records, state)
+
+    state =
+      %State{state | pending: "SHARD_END"}
+      |> checkpoint()
+
     {:noreply, state}
   end
 

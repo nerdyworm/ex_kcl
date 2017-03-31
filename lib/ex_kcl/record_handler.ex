@@ -4,7 +4,11 @@ defmodule ExKcl.RecordHandler do
   def handle_records(state, handler, records) do
     timeout = 10_000
     Enum.each(records, fn(record) ->
-      task = Task.Supervisor.async_nolink(state.task_supervisor, __MODULE__, :handle_record, [record, handler, state])
+      task = Task.Supervisor.async_nolink(
+        state.task_supervisor,
+        handler,
+        :handle_record,
+        [record])
 
       case Task.yield(task, timeout) || Task.shutdown(task) do
         {:ok, :ok} ->
@@ -19,11 +23,8 @@ defmodule ExKcl.RecordHandler do
           :ok
       end
     end)
-  end
 
-  def handle_record(record, handler, state) do
-    IO.puts "handling: #{inspect record}"
+    IO.puts "Proccessed #{length(records)} records"
     :ok
   end
-
 end

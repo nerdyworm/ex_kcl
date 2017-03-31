@@ -26,33 +26,8 @@ defmodule ExKcl.IntegrationTest do
    ]
   end
 
-  def handle_record(record, state) do
-    tasks =
-      handlers()
-      |> Enum.map(fn(handler) ->
-         Task.Supervisor.async_nolink(state.task_supervisor, handler, :handle_record, [record, state])
-      end)
-      |> Task.yield_many(10_000)
-
-
-    results = Enum.map(tasks, fn {task, res} ->
-      res || Task.shutdown(task, :brutal_kill)
-    end)
-
-    for result <- results do
-      case result do
-        {:ok, :ok} ->
-          :ok
-
-        {:exit, reason} ->
-          message = Exception.format(:exit, reason, System.stacktrace)
-          :ok = state.handler.nack_record(record, message)
-
-        huh ->
-          IO.puts "#{inspect huh}"
-          :ok
-      end
-    end
+  def handle_record(record) do
+    IO.puts "handle record: #{inspect record}"
     :ok
   end
 

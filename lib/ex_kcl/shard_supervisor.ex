@@ -6,19 +6,9 @@ defmodule ExKcl.ShardSupervisor do
   end
 
   def init({opts, lease}) do
-    consumers = opts[:handler].handlers
-
-    tuple = ExKcl.ShardProducer.via_tuple(opts, lease)
-
     children = [
       worker(ExKcl.ShardReader, [opts, lease])
     ]
-
-    #children = [
-      #worker(ExKcl.ShardProducer, [opts, lease]),
-    #] ++ Enum.map(consumers, fn(module) ->
-      #worker(module, [tuple])
-    #end)
 
     supervise(children, strategy: :one_for_one)
   end
