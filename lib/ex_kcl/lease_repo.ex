@@ -36,6 +36,10 @@ defmodule ExKcl.LeaseRepo do
     GenServer.call(repo, {:create, shard})
   end
 
+  def delete(repo, lease) do
+    GenServer.call(repo, {:delete, lease})
+  end
+
   def renew(repo, lease) do
     GenServer.call(repo, {:renew, lease})
   end
@@ -112,6 +116,13 @@ defmodule ExKcl.LeaseRepo do
       Dynamo.delete_item(table, %{shard_id: lease.shard_id})
       |> ExAws.request!
     end)
+
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:delete, %Lease{shard_id: shard_id}}, _, %State{table: table} = state) do
+    Dynamo.delete_item(table, %{shard_id: shard_id})
+    |> ExAws.request!
 
     {:reply, :ok, state}
   end

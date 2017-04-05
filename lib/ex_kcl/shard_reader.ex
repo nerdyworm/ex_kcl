@@ -104,13 +104,14 @@ defmodule ExKcl.ShardReader do
     ExKcl.RecordHandler.handle_records(state, state.handler, records)
   end
 
-  defp dispatch_records(%{"Records" => [], "NextShardIterator" => iterator}, %State{lease: %Lease{checkpoint: "TRIM_HORIZON"}} = state) do
-    state =
-      %State{state | iterator: iterator, pending: "SHARD_END"}
-      |> checkpoint()
+  # TODO - this isn't right...
+  #defp dispatch_records(%{"Records" => [], "NextShardIterator" => iterator}, %State{lease: %Lease{checkpoint: "TRIM_HORIZON"}} = state) do
+    #state =
+      #%State{state | iterator: iterator, pending: "SHARD_END"}
+      #|> checkpoint()
 
-    {:noreply, state}
-  end
+    #{:noreply, state}
+  #end
 
   defp dispatch_records(%{"Records" => [], "NextShardIterator" => iterator}, state) do
     Process.send_after(self(), :fetch_records, 2000) # TODO - config timeout

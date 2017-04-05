@@ -5,7 +5,10 @@ defmodule ExKcl.ShardSyncer do
   use GenServer
   require Logger
 
-  alias ExKcl.LeaseRepo
+  alias ExKcl.{
+    LeaseRepo,
+    LeaseCoordinator,
+  }
 
   defmodule State do
     defstruct [
@@ -47,7 +50,32 @@ defmodule ExKcl.ShardSyncer do
 
   defp sync_shards(%State{stream_name: stream_name, adapter: adapter, repo: repo}) do
     {:ok, shards} = adapter.get_shards(stream_name)
-    Enum.each(shards, &(LeaseRepo.create(repo, &1)))
+
+    # gen currently listed leases
+    {:ok, leases} = LeaseRepo.list(repo)
+
+    # shards with no leases
+    Enum.each(shards, fn(shard) ->
+      case Enum.find(leases, &(&1.shard_id == shard.shard_id)) do
+        nil ->
+          LeaseRepo.create(repo, shard)
+
+        lease ->
+          lease
+      end
+    end)
+
+    # delete leases with no shards
+    Enum.each(leases, fn(lease) ->
+      case Enum.find(shards, &(&1.shard_id == lease.shard_id)) do
+        nil ->
+          LeaseRepo.delete(repo, lease)
+
+        shard ->
+          shard
+      end
+    end)
+
     :ok
   end
 end
