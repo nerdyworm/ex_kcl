@@ -17,7 +17,6 @@ defmodule ExKcl do
       producer_registry:   Module.concat(name, ProducerRegistry),
     ] ++ opts
 
-
     children = [
       worker(ExKcl.LeaseRepo,        [opts]),
       worker(ExKcl.LeaseTaker,       [worker_id, opts]),

@@ -7,6 +7,7 @@ defmodule ExKcl.LeaseCoordinator do
   use GenServer
 
   alias ExKcl.{
+    LeaseRepo,
     LeaseTaker
   }
 
@@ -15,6 +16,7 @@ defmodule ExKcl.LeaseCoordinator do
   defmodule State do
     defstruct [
       worker_id: nil,
+      repo: nil,
       taker: nil,
       worker_sup: nil,
       workers: %{},
@@ -27,8 +29,11 @@ defmodule ExKcl.LeaseCoordinator do
   end
 
   def init({worker_id, opts}) do
+    Process.flag(:trap_exit, true)
+
     state = %State{
       worker_id:  worker_id,
+      repo:       opts[:repo],
       taker:      opts[:taker],
       worker_sup: opts[:worker_sup],
       timeout:    opts[:coordinator_sync_interval]
@@ -39,9 +44,6 @@ defmodule ExKcl.LeaseCoordinator do
 
   def handle_info(:timeout, %State{worker_id: worker_id, taker: taker, worker_sup: worker_sup, workers: workers} = state) do
     {:ok, leases} = LeaseTaker.take(taker)
-    if length(leases) > 0 do
-      Logger.info "#{worker_id} has taken #{Enum.map(leases, &(&1.shard_id)) |> Enum.join(", ")}"
-    end
 
     workers =
       Enum.reduce(leases, workers, fn(lease, workers) ->
@@ -61,11 +63,16 @@ defmodule ExKcl.LeaseCoordinator do
     {:noreply, %State{state | workers: workers}, state.timeout}
   end
 
-  def handle_info({:DOWN, _ref, :process, pid, :shutdown}, %State{worker_id: worker_id, workers: workers} = state) do
+  def handle_info({:DOWN, _ref, :process, pid, :shutdown}, %State{worker_id: worker_id, workers: workers, repo: repo} = state) do
     shard_id = Map.get(workers, pid)
-    Logger.info "#{worker_id} has shutdown #{shard_id}"
+    Logger.info "[ex_kcl] #{worker_id} #{shard_id} shutdown"
 
+    :ok = LeaseRepo.release(repo, shard_id, worker_id)
     workers = Map.delete(workers, pid)
     {:noreply, %State{state | workers: workers}, 0}
+  end
+
+  def terminate(_, _) do
+    :normal
   end
 end

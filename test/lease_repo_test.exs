@@ -59,4 +59,14 @@ defmodule LeaseRepoTest do
     assert lease.owner == "new_owner"
     assert lease.counter == 2
   end
+
+  test "release", %{repo: repo} do
+    :ok = LeaseRepo.create(repo, %Shard{shard_id: "shard-0001"})
+    {:ok, lease} = LeaseRepo.get(repo, "shard-0001")
+    {:ok, lease} = LeaseRepo.take(repo, lease, "owner")
+
+    :ok = LeaseRepo.release(repo, "shard-0001", "owner")
+    {:ok, lease} = LeaseRepo.get(repo, "shard-0001")
+    assert lease.owner == nil
+  end
 end

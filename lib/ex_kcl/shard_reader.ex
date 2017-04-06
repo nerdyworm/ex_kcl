@@ -14,7 +14,9 @@ defmodule ExKcl.ShardReader do
       worker_sup: nil,
       worker_id: nil,
       supervisor_registry: nil,
-      task_supervisor: nil
+      task_supervisor: nil,
+      idle_ms: 2000,
+      opts: nil
     ]
   end
 
@@ -34,14 +36,16 @@ defmodule ExKcl.ShardReader do
   def init({opts, lease}) do
     state = %State{
       lease:       lease,
+      opts: opts,
       adapter:     opts[:adapter],
       handler:     opts[:handler],
       repo:        opts[:repo],
       stream_name: opts[:stream_name],
       worker_sup:  opts[:worker_sup],
       worker_id:   opts[:worker_id],
+      idle_ms:     opts[:idle_ms],
       task_supervisor: opts[:task_supervisor],
-      supervisor_registry: opts[:supervisor_registry],
+      supervisor_registry: opts[:supervisor_registry]
     }
 
     Process.send(self(), :fetch_records, [])
@@ -57,7 +61,7 @@ defmodule ExKcl.ShardReader do
   defp fetch_records(%State{adapter: adapter, stream_name: stream_name, lease: lease, iterator: iterator, worker_id: worker_id} = state) when is_nil(iterator) do
     case adapter.get_shard_iterator(stream_name, lease) do
       {:ok, %{"ShardIterator" => iterator}} ->
-        Logger.info "#{worker_id} has started #{lease.shard_id} at #{lease.checkpoint}"
+        Logger.info "[ex_kcl] #{worker_id} #{lease.shard_id} started at #{lease.checkpoint}"
         %State{state | iterator: iterator}
         |> fetch_records()
 
@@ -100,21 +104,16 @@ defmodule ExKcl.ShardReader do
     end
   end
 
-  defp run(records, state) do
-    ExKcl.RecordHandler.handle_records(state, state.handler, records)
+  defp run(records, %State{lease: %Lease{shard_id: shard_id, owner: owner}, handler: handler, opts: opts} = state) do
+    start = :os.system_time(:milli_seconds)
+    :ok = :erlang.apply(handler, :handle_records, [records, opts])
+    #:ok = ExKcl.RecordHandler.handle_records(state, state.handler, records)
+    Logger.info "[ex_kcl] #{owner} #{shard_id} handled records=#{length(records)} runtime=#{:os.system_time(:milli_seconds) - start}ms"
+    :ok
   end
 
-  # TODO - this isn't right...
-  #defp dispatch_records(%{"Records" => [], "NextShardIterator" => iterator}, %State{lease: %Lease{checkpoint: "TRIM_HORIZON"}} = state) do
-    #state =
-      #%State{state | iterator: iterator, pending: "SHARD_END"}
-      #|> checkpoint()
-
-    #{:noreply, state}
-  #end
-
   defp dispatch_records(%{"Records" => [], "NextShardIterator" => iterator}, state) do
-    Process.send_after(self(), :fetch_records, 2000) # TODO - config timeout
+    Process.send_after(self(), :fetch_records, state.idle_ms)
     {:noreply,  %State{state | iterator: iterator, pending: state.lease.checkpoint}}
   end
 
@@ -124,7 +123,7 @@ defmodule ExKcl.ShardReader do
     state = %State{state | iterator: iterator,  pending: checkpoint}
     :ok = run(records, state)
 
-    Process.send_after(self(), :fetch_records, 0) # TODO - config timeout
+    Process.send_after(self(), :fetch_records, 0)
     {:noreply, state}
   end
 

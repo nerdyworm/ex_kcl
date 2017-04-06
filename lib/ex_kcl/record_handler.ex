@@ -3,28 +3,24 @@ defmodule ExKcl.RecordHandler do
 
   def handle_records(state, handler, records) do
     timeout = 10_000
-    Enum.each(records, fn(record) ->
-      task = Task.Supervisor.async_nolink(
-        state.task_supervisor,
-        handler,
-        :handle_record,
-        [record])
+    task = Task.Supervisor.async_nolink(
+      state.task_supervisor,
+      handler,
+      :handle_records,
+      [records])
 
-      case Task.yield(task, timeout) || Task.shutdown(task) do
-        {:ok, :ok} ->
-          :ok
+    case Task.yield(task, timeout) || Task.shutdown(task) do
+      {:ok, :ok} ->
+        :ok
 
-        {:exit, reason} ->
-          message = Exception.format(:exit, reason, System.stacktrace)
-          :ok = handler.nack_record(record, message)
+      {:exit, reason} ->
+        message = Exception.format(:exit, reason, System.stacktrace)
+        :ok = handler.nack_record(records, message)
 
-        nil ->
-          Logger.warn "Failed to get a result in #{timeout}ms"
-          :ok
-      end
-    end)
+      nil ->
+        Logger.warn "[ex_kcl] Failed to get a result in #{timeout}ms"
+        :ok
 
-    IO.puts "Proccessed #{length(records)} records"
-    :ok
+    end
   end
 end

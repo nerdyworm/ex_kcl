@@ -44,6 +44,10 @@ defmodule ExKcl.LeaseRepo do
     GenServer.call(repo, {:renew, lease})
   end
 
+  def release(repo, shard_id, worker_id) do
+    GenServer.call(repo, {:release, shard_id, worker_id})
+  end
+
   def get(repo, shard_id) do
     GenServer.call(repo, {:get, shard_id})
   end
@@ -70,6 +74,22 @@ defmodule ExKcl.LeaseRepo do
 
     {:ok, _} = Dynamo.put_item(table, lease, opts) |> ExAws.request
     {:reply, {:ok, lease}, state}
+  end
+
+  def handle_call({:release, shard_id, owner}, _, %State{table: table} = state) do
+    opts = [
+      condition_expression: "#owner = :owner",
+      expression_attribute_names: %{"#owner" => "owner"},
+      expression_attribute_values: [owner: owner],
+      update_expression: "REMOVE #owner"]
+
+    case Dynamo.update_item(table, %{shard_id: shard_id}, opts) |> ExAws.request do
+      {:ok, _} ->
+        {:reply, :ok, state}
+
+      {:error, {"ConditionalCheckFailedException", _}} ->
+        {:reply, :ok, state}
+    end
   end
 
   def handle_call({:take, %Lease{counter: counter} = lease, owner}, _, %State{table: table} = state) do
