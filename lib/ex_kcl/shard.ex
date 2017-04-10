@@ -41,10 +41,10 @@ defmodule ExKcl.Shard do
 
   def decode(map) do
     hash_key_range =
-     case Map.get(map, "HashKeyRange") do
-       nil -> nil
-       range -> HashKeyRange.decode(range)
-     end
+    case Map.get(map, "HashKeyRange") do
+      nil -> nil
+      range -> HashKeyRange.decode(range)
+    end
 
     %Shard{
       shard_id: Map.get(map, "ShardId"),

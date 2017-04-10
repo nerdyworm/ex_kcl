@@ -52,6 +52,11 @@ defmodule ExKcl.ShardReader do
     {:ok, state}
   end
 
+  # ES likes to ack things
+  def handle_info({_ref, :ok}, state) do
+    {:noreply, state}
+  end
+
   def handle_info(:fetch_records, state) do
     state
     |> checkpoint()
@@ -107,7 +112,6 @@ defmodule ExKcl.ShardReader do
   defp run(records, %State{lease: %Lease{shard_id: shard_id, owner: owner}, handler: handler, opts: opts} = state) do
     start = :os.system_time(:milli_seconds)
     :ok = :erlang.apply(handler, :handle_records, [records, opts])
-    #:ok = ExKcl.RecordHandler.handle_records(state, state.handler, records)
     Logger.info "[ex_kcl] #{owner} #{shard_id} handled records=#{length(records)} runtime=#{:os.system_time(:milli_seconds) - start}ms"
     :ok
   end
