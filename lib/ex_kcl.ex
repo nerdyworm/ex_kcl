@@ -4,6 +4,10 @@ defmodule ExKcl do
   def start_link(name, opts) do
     worker_id = Keyword.get(opts, :worker_id, UUID.uuid4)
 
+    defaults = [
+      idle_ms: 2000
+    ]
+
     opts = [
       handler:      name,
       worker_id:    worker_id,
@@ -16,6 +20,8 @@ defmodule ExKcl do
       supervisor_registry: Module.concat(name, SupervisorRegistry),
       producer_registry:   Module.concat(name, ProducerRegistry),
     ] ++ opts
+
+    opts = Keyword.merge(defaults, opts)
 
     children = [
       worker(ExKcl.LeaseRepo,        [opts]),

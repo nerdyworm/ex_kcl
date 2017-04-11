@@ -6,12 +6,10 @@ defmodule ExKcl.IntegrationTest do
     Adapters.Dynamodb
   }
 
-  defmodule Consumer do
-    def handle_record(record, state) do
-      IO.puts "handle_record: #{inspect record}"
-      IO.puts "\n"
-      :ok
-    end
+  def handle_records(record, state) do
+    IO.puts "handle_record: #{inspect record}"
+    IO.puts "\n"
+    :ok
   end
 
   def config do
@@ -36,14 +34,11 @@ defmodule ExKcl.IntegrationTest do
     :ok
   end
 
-  def handlers() do
-    [Consumer, Consumer, Consumer]
-  end
-
   @tag timeout: 60_000 * 60
   test "can actually use this thing" do
     config = Keyword.merge(Stream.default_config, config())
     {:ok, pid} = ExKcl.start_link(__MODULE__, config)
+
     :timer.sleep(59_000 * 60)
   end
 end

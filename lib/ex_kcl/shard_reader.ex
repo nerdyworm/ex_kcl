@@ -109,13 +109,6 @@ defmodule ExKcl.ShardReader do
     end
   end
 
-  defp run(records, %State{lease: %Lease{shard_id: shard_id, owner: owner}, handler: handler, opts: opts} = state) do
-    start = :os.system_time(:milli_seconds)
-    :ok = :erlang.apply(handler, :handle_records, [records, opts])
-    Logger.info "[ex_kcl] #{owner} #{shard_id} handled records=#{length(records)} runtime=#{:os.system_time(:milli_seconds) - start}ms"
-    :ok
-  end
-
   defp dispatch_records(%{"Records" => [], "NextShardIterator" => iterator}, state) do
     Process.send_after(self(), :fetch_records, state.idle_ms)
     {:noreply,  %State{state | iterator: iterator, pending: state.lease.checkpoint}}
@@ -132,7 +125,7 @@ defmodule ExKcl.ShardReader do
   end
 
   defp dispatch_records(%{"Records" => records}, state) do
-    :ok = run(records, state)
+    unless records == [], do: :ok = run(records, state)
 
     state =
       %State{state | pending: "SHARD_END"}
@@ -143,5 +136,12 @@ defmodule ExKcl.ShardReader do
 
   defp stop_supervisor(%State{worker_sup: worker_sup, supervisor_registry: supervisor_registry, lease: lease}) do
     :ok = ExKcl.ShardWorkerSupervisor.stop_worker(worker_sup, supervisor_registry, lease)
+  end
+
+  defp run(records, %State{lease: %Lease{shard_id: shard_id, owner: owner}, handler: handler, opts: opts} = state) do
+    start = :os.system_time(:milli_seconds)
+    :ok = :erlang.apply(handler, :handle_records, [records, opts])
+    Logger.info "[ex_kcl] #{owner} #{shard_id} handled records=#{length(records)} runtime=#{:os.system_time(:milli_seconds) - start}ms"
+    :ok
   end
 end
