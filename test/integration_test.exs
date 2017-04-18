@@ -34,11 +34,11 @@ defmodule ExKcl.IntegrationTest do
     :ok
   end
 
-  @tag timeout: 60_000 * 60
-  test "can actually use this thing" do
-    config = Keyword.merge(Stream.default_config, config())
-    {:ok, pid} = ExKcl.start_link(__MODULE__, config)
+  #@tag timeout: 60_000 * 60
+  #test "can actually use this thing" do
+    #config = Keyword.merge(Stream.default_config, config())
+    #{:ok, pid} = ExKcl.start_link(__MODULE__, config)
 
-    :timer.sleep(59_000 * 60)
-  end
+    #:timer.sleep(59_000 * 60)
+  #end
 end

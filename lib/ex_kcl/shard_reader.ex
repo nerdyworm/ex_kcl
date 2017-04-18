@@ -73,6 +73,9 @@ defmodule ExKcl.ShardReader do
       {:error, {"ResourceNotFoundException", "Requested resource not found: Shard does not exist"}} ->
         %State{state | pending: "SHARD_END"}
         |> checkpoint()
+
+      #{:error, {"ValidationException", message}} ->
+        # hmm, mostly happens when a shard id is invalid
     end
   end
 
